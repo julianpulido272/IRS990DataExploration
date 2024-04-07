@@ -110,7 +110,7 @@ def printData(xmlResults):
     print the data in csv format. need to check for null values.
     """
     #we only want to print these keys
-    keys = ["EIN", "returnDateStamp", "TotalEmployeeCnt", "TotalContributionsAmt" , "CYTotalRevenueAmt"]
+    keys = ["EIN","BusinessName" ,"returnDateStamp", "TotalEmployeeCnt", "TotalContributionsAmt" , "CYTotalRevenueAmt"]
 
     #print each key so that it will be our header for our dataset
     for k in keys:
