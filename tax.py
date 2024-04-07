@@ -22,7 +22,7 @@ def extract(xmlfile):
     Extract a dictionary containing the elements of interest
     """
     tree = etree.parse(xmlfile)
-    fields990 = ["ActivityOrMissionDesc", "MissionDesc", "TotalEmployeeCnt", "TotalAssetsEOYAmt", "TotalContributionsAmt", "CYTotalRevenueAmt"]
+    fields990 = ["ActivityOrMissionDesc", "MissionDesc", "TotalEmployeeCnt", "TotalAssetsEOYAmt", "TotalContributionsAmt", "CYTotalRevenueAmt" , "TotalVolunteersCnt"]
 
     # Hold all the results
     result = {}
@@ -110,7 +110,7 @@ def printData(xmlResults):
     print the data in csv format. need to check for null values.
     """
     #we only want to print these keys
-    keys = ["EIN","BusinessName" ,"returnDateStamp", "TotalEmployeeCnt", "TotalContributionsAmt" , "CYTotalRevenueAmt"]
+    keys = ["EIN","BusinessName" ,"returnDateStamp", "TotalEmployeeCnt","TotalVolunteersCnt", "TotalContributionsAmt" , "CYTotalRevenueAmt"]
 
     #print each key so that it will be our header for our dataset
     for k in keys:
