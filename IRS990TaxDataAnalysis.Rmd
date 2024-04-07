@@ -1,0 +1,36 @@
+---
+title: "IRS990TaxDataAnalysis"
+author: "Julian Pulido"
+date: "2024-04-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+```{r}
+#read the data
+data = read.csv("C:\\Users\\Julian\\OneDrive\\Escuela\\Spring24\\STAT129\\IRS990DataExploration\\taxResults.csv")
+
+#format the date better
+data$returnDateStamp = as.Date(data$returnDateStamp)
+
+#convert all business names to uppercase
+data$BusinessName = toupper(data$BusinessName)
+
+data |> ggplot(aes(x =returnDateStamp, y = TotalContributionsAmt,group = EIN, color =BusinessName))+
+  geom_point()+
+  geom_line()+
+  labs(title = "Total Contributions of non-profit organizations over time",
+       x = "Date",
+       y = "Contributions Amount")
+
+data |> ggplot(aes(x =returnDateStamp, y = CYTotalRevenueAmt,group = EIN, color =BusinessName))+
+  geom_point()+
+  geom_line()+
+  labs(title = "Total Revenue of non-profit organizations over time",
+       x = "Date",
+       y = "Contributions Amount")
+```
