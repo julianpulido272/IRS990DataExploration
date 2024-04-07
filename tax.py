@@ -47,6 +47,10 @@ def extract(xmlfile):
         result["EIN"] = tree.xpath("/Return/ReturnHeader/Filer/EIN/text()")[0]
     except:
         result["EIN"] = None
+    try:
+        result["BusinessName"] = tree.xpath("/Return/ReturnHeader/Filer/BusinessName/BusinessNameLine1Txt/text()")[0]
+    except:
+        result["BusinessName"] = None
     
     #patterns to find regex in 
     #patterns = [r"water"]
