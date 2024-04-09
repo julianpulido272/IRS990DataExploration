@@ -3,8 +3,9 @@
 import os
 import random
 import re
-
+from copy import deepcopy
 from lxml import etree
+from functools import partial 
 
 datadir = "/stat129/all990files/"
 
@@ -53,57 +54,25 @@ def extract(xmlfile):
         result["BusinessName"] = None
     
     #patterns to find regex in 
-    #patterns = [r"water"]
-    #value = result["ActivityOrMissionDesc"]
+    #patterns = [r"immigration"]
+    value = result["ActivityOrMissionDesc"]
 
-    #for p in patterns:
-    #    if  value and re.search(p, value, re.IGNORECASE):
-    #        return result
-    #return None
-
-    #once we have found which non profits were of interest to us, we search now if the xml file contains that EIN
-    EINList = [r"842322254", r"770487468", r"800267674", r"263547740", r"113299408"]
-
-    #get the EIN for our XML result dictionary
-    target = result["EIN"]
-
-    for ein in EINList:
-        if target and re.search(ein, target):
+    
+    if value and re.search(r"immigration", value, re.IGNORECASE):
             return result
     return None
 
-def extract_Regex(xmlfile, regex):
-    """
-    Extract a dictionary containing the elements of interest. if the xml file contains the regex expression in the description, return the xml. if not, return null
-    """
-    tree = etree.parse(xmlfile)
-    fields990 = ["ActivityOrMissionDesc", "MissionDesc", "TotalEmployeeCnt", "TotalAssetsEOYAmt", "TotalContributionsAmt", "CYTotalRevenueAmt"]
+    #once we have found which non profits were of interest to us, we search now if the xml file contains that EIN
+    #EINList = [r"842322254", r"770487468", r"800267674", r"263547740", r"113299408"]
 
-    # Hold all the results
-    result = {}
-    for f in fields990:
-        # Won't always be there
-        try:
-            result[f] = tree.xpath("/Return/ReturnData/IRS990/" + f + "/text()")[0]
-        except:
-            # didn't work!
-            # There are certainly better ways to handle this.
-            result[f] = None
+    #get the EIN for our XML result dictionary
+    #target = result["EIN"]
 
-    #get the date for which the tax file was created. has a different xpath
-    try:
-        result["returnDateStamp"] = tree.xpath("/Return/ReturnHeader/ReturnTs/text()")[0]
-    except:
-        result["returnDateStamp"]= None
+    #for ein in EINList:
+    #    if target and re.search(ein, target):
+    #        return result
+    #return None
 
-    #check if our regex is in our xmlfile, if not return null since we don't care about it
-    value = result["ActivityOrMissionDesc"]
-    
-    #check if value exists and search for it
-    if  value and re.search(regex, value, re.IGNORECASE):
-        return result
-    else:
-        return None
 
 def printData(xmlResults):
     """
@@ -119,26 +88,51 @@ def printData(xmlResults):
 
     #for each documnent in our list of xmlResults
     for doc in xmlResults:
+        if doc is not None:
         #check for each key per documnet
-        for key in keys:
-            #check if value is null. if so print blank
-            if doc[key] is not None:
-                print(doc[key] + ",", end = "")
-            else:
-                print("" + ",", end = "")
-        #prints a new line
-        print("")
+            for key in keys:
+                #check if value is null. if so print blank
+                if doc[key] is not None:
+                    print(doc[key] , end = ", ")
+                else:
+                    print("" ,end = ", ")
+            #prints a new line
+            print("")
 
 
+def convertToInt(result):
+    """
+    converts all integers values to actual integers in our xml results
+    """
 
+    for x in result:
+        for k,v in x.items():
+            if k in {"TotalEmployeeCnt", "TotalVolunteersCnt", "TotalContributionsAmt", "CYTotalRevenueAmt"} and v is not None:
+                x[k] = int(v) #convert to integer
+    return result
 
-# Test our function
-r3 = extract(s990[3])
-#print(r3)
+def sortByKey(data ,key):
+    """
+    function to sort by key
+    necessary because some keys have None values. Cant sort a None value so we replace it with +-Infinity
+    """
+    #define a custom key function to handle None values
+    def keyNoneHandler(item):
+        value = item.get(key)
+        return value if value is not None else float('-inf')
+
+    return data.sort(key = keyNoneHandler, reverse = True)
+
+def xmlContainsEIN(xmlFiles, nums):
+    """
+    Given a xmlFile of dictionaries, this method will use set lookups to see if the xml File is of our particular interest by seeing if it has an EIN that matches our set. 
+    """
+    if xmlFiles["EIN"] in nums:
+        return xmlFiles
+    else:
+        return None
 
 # Apply our function to many files
-#pattern = r"water"
-#rn = list(map(lambda filename: extract_Regex(filename,pattern),s990))
 rn = map(extract, s990)
 
 # Convert it to a list, because map is lazy
@@ -147,8 +141,25 @@ rn = map(extract, s990)
 #rn = list(filter(None,rn))
 #printData(rn)
 
+#print("\n\nprinting2022")
 
-#print(rn)
+#copy rn into d2
+#d2 = deepcopy(rn)
+#d2 = convertToInt(d2)
+
+
+#get non profits from 2022
+#d22 = [x for x in d2 if "2022" in x["returnDateStamp"]]
+#printData(d22)
+#get 5 biggest non profits based on our idea of importance of 2022
+#d22.sort(key = lambda x: x["TotalContributionsAmt"])
+#sortByKey(d22, "TotalContributionsAmt")
+#printData(d22)
+
+#after sorting, the 5 highest importance will be at the top of my list
+#top5MostImportant = {result["EIN"] for result in d22[:5]}
+#print(top5MostImportant)
+
 # Now run it on... EVERYTHING ALL AT ONCE IN PARALLEL!
 # See https://docs.python.org/3/library/multiprocessing.html
 from multiprocessing import Pool
@@ -157,7 +168,29 @@ from multiprocessing import Pool
 with Pool(10) as p:
     r = p.map(extract, all990)
     out = list(filter(None,r))
-    printData(out)
+
+#make copy of output to edit the copy
+outCopy = deepcopy(out)
+
+#convert all strings to ints
+outCopy = convertToInt(out)
+
+#get subset by year. Im picking 2022
+out22 = [x for x in outCopy if "2022" in x["returnDateStamp"]]
+
+#sort by most important factor
+sortByKey(out22, "TotalContributionsAmt")
+
+#get a set of the top 5 non profits based on my most important factor
+top5MostImportantEIN = {file["EIN"] for file in out22[:5]}
+
+#grep for these EIN in our orginal output
+with Pool(10) as p:
+    xmlContainsEINPartial = partial(xmlContainsEIN, nums = top5MostImportantEIN)
+    output = p.map(xmlContainsEINPartial, out)
+    outputFiltered = list(filter(None,output))
+    printData(outputFiltered)
+
 
 #print out our desired fields from the ouput of 2.3 million xml files
 #our output wont be 2.3 million in size bc we reduced it using REGEX and filtering
