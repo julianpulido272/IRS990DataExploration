@@ -1,0 +1,207 @@
+---
+title: "InterestingNonprofitsSubmission"
+author: "Julian Pulido"
+date: "2024-04-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## **1.** The plot and what it shows
+
+I created my plot graphs using ggplot within R. I set my most important factor to be `TotalContributions` by non profit organization. I selected organizations that provide assistance and aid to immigrants, and selected the top 5 who contributed the most money in 2022. In 2023, the World Relief Corp of Nationals donated 123 million dollars.
+
+I also plotted employee counts and volunteers counts by non profits even though they weren't in my 'important' category. I wanted to see their trend over time. It is interesting to see that most non profits had less than 50 volunteers, but World Relief Corp of Nationals had 150,000 volunteers!
+
+```{r}
+library(tidyverse)
+library(reticulate)
+#read the data
+data = read.csv("C:\\Users\\Julian\\OneDrive\\Escuela\\Spring24\\STAT129\\IRS990DataExploration\\taxResults.csv")
+
+#format the date better
+data$returnDateStamp = as.Date(data$returnDateStamp)
+
+#convert all business names to uppercase
+data$BusinessName = toupper(data$BusinessName)
+
+data |> ggplot(aes(x =returnDateStamp, y = TotalContributionsAmt,group = EIN, color =BusinessName))+
+  geom_point()+
+  geom_line()+
+  labs(title = "Total Contributions of non-profit organizations over time",
+       x = "Date",
+       y = "Contributions Amount")
+
+data |> ggplot(aes(x =returnDateStamp, y = TotalEmployeeCnt,group = EIN, color =BusinessName))+
+  geom_point()+
+  geom_line()+
+  labs(title = "Total employees of non-profit organizations over time",
+       x = "Date",
+       y = "employees")
+
+data |> ggplot(aes(x =returnDateStamp, y = TotalVolunteersCnt,group = EIN, color =BusinessName))+
+  geom_point()+
+  geom_line()+
+  labs(title = "Total volunteers of non-profit organizations over time",
+       x = "Date",
+       y = "Volunteers")
+```
+
+## **2. regular expression** used to determine whether the nonprofit was in your subset
+
+I kept my regular expression pretty simple because I wanted to capture a large subset of any non-profit that provided any assistance to immigrants. For the 2.3 XML files, i used a simple regular expression of `r"immigration"` to accomplish this. If a non-profit contained this keyword it would be returned in the function, if it did not then `None` would be returned.
+
+```{python, eval = FALSE}
+#...part of code showing how to find a key word within a xml path .
+def extract(XMLfiles):
+    #patterns to find regex in 
+    value = result["ActivityOrMissionDesc"]
+
+    
+    if value and re.search(r"immigration", value, re.IGNORECASE):
+            return result
+    return None
+```
+
+I then wanted to search the most important immigrant assisting non-profits in 2022 by `TotalContributionsAmt`. I first created a subset of only organizations that had filed in 2022 and sorted by `TotalContributionsAmt`. I then selected the top 5 highest contributors and recorded their EIN in a set.
+
+```{python, eval = FALSE}
+# 10 parallel workers
+with Pool(10) as p:
+    r = p.map(extract, all990)
+    out = list(filter(None,r))
+
+#make copy of output to edit the copy
+outCopy = deepcopy(out)
+
+#convert all strings to ints
+outCopy = convertToInt(out)
+
+#get subset by year. Im picking 2022
+out22 = [x for x in outCopy if "2022" in x["returnDateStamp"]]
+
+#sort by most important factor
+sortByKey(out22, "TotalContributionsAmt")
+
+#get a set of the top 5 non profits based on my most important factor
+top5MostImportantEIN = {file["EIN"] for file in out22[:5]}
+```
+
+After having 5 of the 'most' important non-profits that I founded most interesting, I finally used regular expression to search through my original subset output and grabbing the data if it matched any numbers of my `EIN` list.
+
+```{python, eval = FALSE}
+def xmlContainsEIN(xmlFiles, nums):
+    """
+    Given a xmlFile of dictionaries, this method will use set lookups to see if the xml File is of our particular interest by seeing if it has an EIN that matches our set. 
+    """
+    if xmlFiles["EIN"] in nums:
+        return xmlFiles
+    else:
+        return None
+
+#get a set of the top 5 non profits based on my most important factor
+top5MostImportantEIN = {file["EIN"] for file in out22[:5]}
+
+
+#grep for these EIN in our orginal output using parallel programming
+with Pool(10) as p:
+    xmlContainsEINPartial = partial(xmlContainsEIN, nums = top5MostImportantEIN)
+    output = p.map(xmlContainsEINPartial, out)
+    outputFiltered = list(filter(None,output))
+    printData(outputFiltered)
+
+```
+
+## **3. XPATH** to determine which nodes you applied the regular expression to, and which nodes you used to determine how "important" the nonprofit is
+
+I applied my regular expressions to the `ActivityOrMissionDesc` and the `EIN` children. In the code above, I first applied my regular expressions on the `ActivityOrMissionDesc` field to see if it was of my interest. After selected 5 of the most important non-profits, I recorded their `EIN`, and I used regular expression to grab any dictionary item if it matched any of element of my `EIN` list. I used `TotalContributionsAmt` to determine how important the non profit is since I believe that's how much they give back to their community.
+
+```{python, eval = FALSE}
+def extract(xmlfile):
+    tree = etree.parse(xmlfile)
+    fields990 = ["ActivityOrMissionDesc", "MissionDesc", "TotalEmployeeCnt", "TotalAssetsEOYAmt", "TotalContributionsAmt", "CYTotalRevenueAmt" , "TotalVolunteersCnt"]
+
+    # Hold all the results
+    result = {}
+    for f in fields990:
+        # Won't always be there
+        try:
+            result[f] = tree.xpath("/Return/ReturnData/IRS990/" + f + "/text()")[0]
+        except:
+            # didn't work!
+            # There are certainly better ways to handle this.
+            result[f] = None
+    
+    #business Filer Info (different fields)
+
+    #get the date for which the tax file was created
+    try:
+        result["returnDateStamp"] = tree.xpath("/Return/ReturnHeader/ReturnTs/text()")[0]
+    except:
+        result["returnDateStamp"]= None
+
+    try:
+        result["EIN"] = tree.xpath("/Return/ReturnHeader/Filer/EIN/text()")[0]
+    except:
+        result["EIN"] = None
+```
+
+## **4. parallel programming** how your program used parallel programming to process the data more efficiently, including the total run time
+
+Using the multiprocessing library within Python, I achieved about a minute of total run time. I used parallel programming in two scenarios. The first was to extract a subset of xml files if they contained my interest keyword: `r"immigration"`.
+
+```{python, eval = FALSE}
+# Now run it on... EVERYTHING ALL AT ONCE IN PARALLEL!
+# See https://docs.python.org/3/library/multiprocessing.html
+from multiprocessing import Pool
+
+# 10 parallel workers
+with Pool(10) as p:
+    r = p.map(extract, all990)
+    out = list(filter(None,r))
+    printData(out)
+
+```
+
+The second part I used parallel programming was when I extracted the data for each `EIN` for which I thought was most important. I ran this function on the subset above, since it was smaller and there was no need to run it on all 2.3 million XML files. If the XML file contained the `EIN` , it would be returned, and if not, `None` would be returned. I later filtered out all `None` values from my list since they are irrelevant.
+
+```{python, eval = FALSE}
+#grep for these EIN in our orginal output
+with Pool(10) as p:
+    xmlContainsEINPartial = partial(xmlContainsEIN, nums = top5MostImportantEIN)
+    output = p.map(xmlContainsEINPartial, out)
+    outputFiltered = list(filter(None,output))
+    printData(outputFiltered)
+```
+
+```         
+julianpulido2@nsm-stats:~/IRS990DataExploration$ time python3 tax.py > taxResults.csv
+
+real    0m56.635s
+user    7m59.949s
+sys     0m16.705s
+```
+
+## 5. Non-profits I chose and their descriptions:
+
+-   UNIDOSUS. EIN = 860212874
+
+    -   UNIDOSUS, THE LARGEST NATIONAL HISPANIC CIVIL RIGHTS AND ADVOCACY ORGANIZATION IN THE UNITED STATES, WORKS TO IMPROVE OPPORTUNITIES FOR HISPANIC AMERICANS. THROUGH ITS NETWORK OF NEARLY 300 AFFILIATED COMMUNITY-BASED ORGANIZATIONS, UNIDOSUS REACHES MILLIONS OF HISPANICS EACH YEAR IN 41 STATES, PUERTO RICO, AND THE DISTRICT OF COLUMBIA. TO ACHIEVE ITS MISSION, UNIDOSUS CONDUCTS APPLIED RESEARCH, POLICY ANALYSIS, AND ADVOCACY, PROVIDING A LATINO PERSPECTIVE IN FIVE KEY AREAS: (1) ASSETS/INVESTMENTS; (2) CIVIL RIGHTS/IMMIGRATION; (3) EDUCATION; (4) EMPLOYMENT AND ECONOMIC STATUS; AND (5) HEALTH. IN ADDITION, IT PROVIDES CAPACITY BUILDING ASSISTANCE TO ITS AFFILIATES WHO WORK AT THE STATE AND LOCAL LEVEL TO ADVANCE OPPORTUNITIES FOR INDIVIDUALS AND FAMILIES.
+
+-   WORLD RELIEF CORP OF NATIONAL. EIN = 236393344
+
+    -   TO EMPOWER THE LOCAL CHURCH TO SERVE THE MOST VULNERABLE.THE MISSION OF WORLD RELIEF, AS ORIGINATED WITHIN THE NATIONAL ASSOCIATION OF EVANGELICALS, IS TO EMPOWER THE LOCAL CHURCH TO SERVE THE MOST VULNERABLE. IN COMMUNITY WITH THE LOCAL CHURCH, WORLD RELIEF ENVISIONS THE MOST VULNERABLE PEOPLE TRANSFORMED ECONOMICALLY, SOCIALLY, AND SPIRITUALLY.WORLD RELIEF SEEKS TO OVERCOME VIOLENCE, POVERTY AND INJUSTICE. THROUGH LOVE IN ACTION, WE BRING HOPE, HEALING AND RESTORATION TO MILLIONS OF THE WORLD'S MOST VULNERABLE WOMEN, MEN AND CHILDREN THROUGH VITAL AND SUSTAINABLE PROGRAMS IN DISASTER RESPONSE, HEALTH AND CHILD DEVELOPMENT, ECONOMIC DEVELOPMENT AND PEACEBUILDING, AS WELL AS REFUGEE AND IMMIGRATION SERVICES IN THE U.S. FOR 75 YEARS, WE'VE PARTNERED WITH CHURCHES AND COMMUNITIES, CURRENTLY ACROSS MORE THAN 20 COUNTRIES, TO PROVIDE RELIEF FROM SUFFERING AND HELP PEOPLE REBUILD THEIR LIVES.
+
+-   CATHOLIC CHAIRITIES OF SANTA CLARA COUNTY. EIN = 942762269
+
+    -   Social Services providing a number of services such as: Mental Health for Adult, Youth and Older Adults, Refugee Program, Refugee Foster Care, Immigration Legal Services, Inmate Services, CORAL After School Programs, Youth Center, Senior Nutrition Program, and Disaster Relief recovery from flood damage and Shared Housing.
+
+-   FWDUS INC. EIN = 462223015
+
+    -   FWD.US, INC. ORGANIZES CONSTITUENCIES AROUND THE COUNTRY TO SUPPORT POLICY CHANGES THAT CREATE OPPORTUNITY AND UNLOCK AMERICA'S POTENTIAL THROUGH COMPREHENSIVE IMMIGRATION REFORM AND CRIMINAL JUSTICE REFORM.
+
+-   FWDUS EDUCATION FUND INC. EIN = 820962378
+
+    -   FWD.US, INC. EDUCATION FUND EDUCATES THE PUBLIC ABOUT IMMIGRATION AND CRIMINAL JUSTICE POLICY AND REFORM. FDW.US EDUCATION FUND CONVENES MEETINGS AT WHICH INTERESTED MEMBERS OF THE PUBLIC CAN RECEIVE INSTRUCTION AND PARTICIPATE IN DISCUSSIONS ABOUT IMMIGRATION AND CRIMINAL JUSTICE LAW AND POLICY. THROUGH FWD.US EDUCATION FUND'S INFORMED IMMIGRANT PROGRAM. IT EXPLAINS RIGHTS OF IMMIGRANTS PROVIDES INFORMATION ABOUT NAVIGATING GOVERNMENT AGENCIES WITH RESPECT TO THOSE RIGHTS
