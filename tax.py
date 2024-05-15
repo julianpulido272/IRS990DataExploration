@@ -128,6 +128,7 @@ def xmlContainsEIN(xmlFiles, nums):
     Given a xmlFile of dictionaries, this method will use set lookups to see if the xml File is of our particular interest by seeing if it has an EIN that matches our set. 
     """
     if xmlFiles["EIN"] in nums:
+        print(xmlFiles["EIN"] + ", " + xmlFiles["ActivityOrMissionDesc"])
         return xmlFiles
     else:
         return None
@@ -189,7 +190,7 @@ with Pool(10) as p:
     xmlContainsEINPartial = partial(xmlContainsEIN, nums = top5MostImportantEIN)
     output = p.map(xmlContainsEINPartial, out)
     outputFiltered = list(filter(None,output))
-    printData(outputFiltered)
+    #printData(outputFiltered)
 
 
 #print out our desired fields from the ouput of 2.3 million xml files
